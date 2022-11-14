@@ -1,25 +1,58 @@
-las = readLAS("C:\\Users\\b7079552\\OneDrive - Newcastle University\\2022_summer_school\\01_data\\ALS\\01_AOI_point_clouds\\ALS_2017_plot_normZ_fltr.las", select="xyz", filter = "-drop_z_below 0")
+library(lidR)
+library(sp)
+library(raster)
+library(dplyr)
 
-print("File loaded")
+# Load the normalized LAS file
+las = file.choose()
+las = readLAS(las, filter = "-drop_z_below 1")
 
-chm <- grid_canopy(las, 0.2, p2r(0.2))
-ker <- matrix(1,3,3)
-chm <- raster::focal(chm, w = ker, fun = mean, na.rm = TRUE)
+# Assign a coordinate system (UTM 32N)
+st_crs(las) <- 32632
 
-ttops <- tree_detection(chm, lmf(ws = 1, hmin = 2))
+#Create Canopy Height Model
 
-raster::plot(chm, col = height.colors(30), xlab="Easting", ylab="Northing")
-raster::plot(ttops, add = TRUE, pch = 1, cex = 2, col = "black", legend = FALSE, xlab="Easting", ylab="Northing")
+# Simple CHM
+#chm <- rasterize_canopy(las, res = 1, algorithm = p2r())
 
-las <- lastrees(las, dalponte2016(chm, ttops, th_tree = 5, th_seed = 0.45, th_cr = 0.55, max_cr = 15, ID = "treeID"))
+#Pit-free CHM
+chm <- rasterize_canopy(las, res = 2, pitfree(max_edge = c(0, 2.5)), pkg = "terra")
 
-plot(las, color = "treeID")
+# Plot the canopy height model
+col <- height.colors(25)
+plot(chm, col = col)
 
-write.csv(las@data, "C:\\Users\\b7079552\\OneDrive - Newcastle University\\2022_summer_school\\01_data\\ALS\\01_AOI_point_clouds\\Segmented\\PlotB_D2016_chm0.2_ws2.csv")
+#Detect the tree tops
+ttops <- locate_trees(chm, lmf(ws = 8, hmin = 3))
 
-metric = tree_metrics(las, .stdtreemetrics)
-hulls  = tree_hulls(las)
-hulls@data = dplyr::left_join(hulls@data, metric@data) #joins two data tables (hulls and metric) together
-spplot(hulls, "Z")
+#Plot the tree tops
+plot(chm, col = height.colors(50))
+plot(sf::st_geometry(ttops), add = TRUE, pch = 3)
 
-write.csv(hulls@data, "C:\\Users\\b7079552\\OneDrive - Newcastle University\\2022_summer_school\\01_data\\ALS\\01_AOI_point_clouds\\Segmented\\PlotB_D2016_chm0.2_ws2_metrics.csv")
+#Segmentation - select one of the methods
+
+# Raster-based methods
+#las <- segment_trees(las, silva2016(chm, ttops))
+
+#las <- segment_trees(las, watershed(chm, th_tree = 2, tol = 1, ext = 1))
+
+las <- segment_trees(las, dalponte2016(chm, ttops, max_cr = 15))
+
+# Point cloud-based methods (very slow with large point clouds)
+#las <- segment_trees(las, li2012())
+
+# Plot the segmented point cloud
+#plot(las, color = "treeID", pal = col)
+
+
+# COnvert the NA values to 0
+las@data[is.na(las@data)] <- 0
+
+#Select output directory
+setwd(choose.dir())
+
+# Save the output point cloud as CSV and LAS
+write.csv(las@data, "Plot1_D2006_chm1.5_ws0.8_dalponte.csv")
+writeLAS(las, "Plot1_D2006_chm1.5_ws0.8_dalponte.las")
+
+
