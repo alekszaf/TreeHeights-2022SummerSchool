@@ -4,8 +4,8 @@ library(raster)
 library(dplyr)
 
 # Load the normalized LAS file
-las = file.choose()
-las = readLAS(las, filter = "-drop_z_below 1")
+las_file = file.choose()
+las = readLAS(las_file, filter = "-drop_z_below 1")
 
 # Assign a coordinate system (UTM 32N)
 st_crs(las) <- 32632
@@ -17,6 +17,7 @@ st_crs(las) <- 32632
 
 #Pit-free CHM
 chm <- rasterize_canopy(las, res = 2, pitfree(max_edge = c(0, 2.5)), pkg = "terra")
+chm <- rasterize_canopy(las, res = 0.2, pitfree(max_edge = c(0, 2.5)), pkg = "terra")
 
 # Plot the canopy height model
 col <- height.colors(25)
@@ -49,10 +50,10 @@ las <- segment_trees(las, dalponte2016(chm, ttops, max_cr = 15))
 las@data[is.na(las@data)] <- 0
 
 #Select output directory
-setwd(choose.dir())
+#setwd(choose.dir())
 
 # Save the output point cloud as CSV and LAS
-write.csv(las@data, "Plot1_D2006_chm1.5_ws0.8_dalponte.csv")
-writeLAS(las, "Plot1_D2006_chm1.5_ws0.8_dalponte.las")
+write.csv(las@data, sprintf("%s_chm1.5_ws0.8_dalponte.csv",substr(las_file,start=1,stop=(nchar(las_file)-4))))
+writeLAS(las, sprintf("%s_chm1.5_ws0.8_dalponte.las",substr(las_file,start=1,stop=(nchar(las_file)-4))))
 
 
